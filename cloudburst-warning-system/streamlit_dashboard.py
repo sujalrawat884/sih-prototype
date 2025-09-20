@@ -25,6 +25,34 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS styling
+st.markdown("""
+    <style>
+      [data-testid="stAppViewContainer"] 
+      [data-testid="stHeader"] {
+        background-color: rgba(0, 0, 0, 0);  
+      }
+      [data-testid="stToolbar"] {
+        right: 2rem;
+      }
+      .st-emotion-cache-czk5ss.e16jpq800 {
+        visibility: hidden;
+      }
+      .st-emotion-cache-mnu3yk.ef3psqc5 {
+        visibility: hidden;
+      }
+      .st-emotion-cache-15ecox0.ezrtsby0 {
+        visibility: hidden;
+      }
+      .st-emotion-cache-fm8pe0.e1nzilvr4 {
+        color: black;
+      }
+      .st-emotion-cache-fm8pe0.e1nzilvr4{
+        color: white;
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
 st.title("🌧️ Cloudburst Early Warning Dashboard")
 
 # Status color legend
@@ -117,23 +145,28 @@ with left:
 
 with right:
     st.subheader("Live Sensor Data (Last 50 Readings)")
-    chart_cols = st.columns(2)
-    # Rainfall
-    with chart_cols[0]:
+    
+    # Create a 2x2 grid for all 4 charts in one compact view
+    chart_row1 = st.columns(2)
+    chart_row2 = st.columns(2)
+    
+    # Row 1: Rainfall and Humidity
+    with chart_row1[0]:
         st.markdown("**Rainfall (mm/hr)**")
-        st.line_chart(df.set_index("timestamp")["rainfall"], use_container_width=True)
-    # Humidity
-    with chart_cols[1]:
+        st.line_chart(df.set_index("timestamp")["rainfall"], use_container_width=True, height=200)
+    
+    with chart_row1[1]:
         st.markdown("**Humidity (%)**")
-        st.line_chart(df.set_index("timestamp")["humidity"], use_container_width=True)
-    # Temperature
-    with chart_cols[0]:
+        st.line_chart(df.set_index("timestamp")["humidity"], use_container_width=True, height=200)
+    
+    # Row 2: Temperature and Pressure
+    with chart_row2[0]:
         st.markdown("**Temperature (°C)**")
-        st.line_chart(df.set_index("timestamp")["temperature"], use_container_width=True)
-    # Pressure
-    with chart_cols[1]:
+        st.line_chart(df.set_index("timestamp")["temperature"], use_container_width=True, height=200)
+    
+    with chart_row2[1]:
         st.markdown("**Pressure (hPa)**")
-        st.line_chart(df.set_index("timestamp")["pressure"], use_container_width=True)
+        st.line_chart(df.set_index("timestamp")["pressure"], use_container_width=True, height=200)
 
 # =============================
 # FOOTER
