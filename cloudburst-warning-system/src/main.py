@@ -9,14 +9,27 @@ from collections import deque
 from datetime import datetime
 from typing import Dict, List
 import logging
+from dotenv import load_dotenv
+import os
+import requests
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
+from twilio.rest import Client  # Add Twilio Client import
+
+load_dotenv()  # Load environment variables from .env file
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize Twilio client
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_NUMBER = os.getenv("TWILIO_NUMBER")  # Your Twilio phone number
+
+twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -89,15 +102,20 @@ def anomaly_detection(data: Dict[str, float]) -> str:
     # Safe conditions
     return "safe"
 
-
-def send_sms_alert() -> None:
+def send_alert_sms(message: str, numbers: list):
     """
-    Placeholder function for SMS alert functionality.
-    In a real implementation, this would integrate with SMS service providers.
+    Send SMS alert using Twilio to a list of phone numbers.
     """
-    logger.info("📱 SMS alert triggered")
-    print("📱 SMS alert triggered")
-
+    responses = []
+    for number in numbers:
+        sms = twilio_client.messages.create(
+            body=message,
+            from_=TWILIO_NUMBER,
+            to=f"+91{number}"  # Add country code if needed
+        )
+        logger.info(f"Alert SMS sent to {number}. SID: {sms.sid}, Status: {sms.status}")
+        responses.append({"number": number, "sid": sms.sid, "status": sms.status})
+    return responses
 
 def trigger_alert(status: str, sensor_data: SensorData) -> None:
     """
@@ -109,10 +127,10 @@ def trigger_alert(status: str, sensor_data: SensorData) -> None:
     """
     if status == "cloudburst_detected":
         alert_message = f"🚨 ALERT: Cloudburst detected! Rainfall: {sensor_data.rainfall}mm/hr, " \
-                       f"Humidity: {sensor_data.humidity}%, Pressure: {sensor_data.pressure}hPa"
+                   f"Humidity: {sensor_data.humidity}%, Pressure: {sensor_data.pressure}hPa. " \
+                   f"Stay safe and avoid low-lying regions."
         logger.critical(alert_message)
-        print(alert_message)
-        send_sms_alert()
+        send_alert_sms(alert_message, ["9937424848"])
     elif status == "warning":
         warning_message = f"⚠️ WARNING: High rainfall detected. Rainfall: {sensor_data.rainfall}mm/hr"
         logger.warning(warning_message)

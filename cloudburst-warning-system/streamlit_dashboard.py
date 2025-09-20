@@ -124,6 +124,9 @@ latest = df.iloc[-1]
 status = latest["status"]
 timestamp = latest["timestamp"]
 
+# Count recent cloudburst alerts (last 10 readings)
+recent_alerts = df.tail(10)["status"].value_counts().get("cloudburst_detected", 0)
+
 # Status color mapping
 status_colors = {
     "safe": ("✅", "green"),
@@ -140,6 +143,35 @@ left, right = st.columns([1, 3])
 with left:
     st.markdown(f"<h2 style='color:{color};font-size:3em;text-align:center'>{icon} {status.replace('_', ' ').title()}</h2>", unsafe_allow_html=True)
     st.markdown(f"<div style='text-align:center;font-size:1.1em'>Last alert: <b>{timestamp.strftime('%Y-%m-%d %H:%M:%S')}</b></div>", unsafe_allow_html=True)
+    
+    # Show SMS alert notification for cloudburst detection
+    if status == "cloudburst_detected":
+        st.markdown("""
+        <div style='background-color:#ffebee;border:2px solid #f44336;border-radius:10px;padding:15px;margin:10px 0;text-align:center'>
+            <h3 style='color:#d32f2f;margin:0;font-weight:bold'>📱 SMS ALERT SENT</h3>
+            <p style='color:#d32f2f;margin:5px 0;font-weight:bold'>Emergency SMS notifications have been sent to registered numbers</p>
+            <p style='color:#333;font-size:0.9em;margin:0;font-weight:normal'>Stay safe and avoid low-lying regions</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Show alert details
+        st.markdown(f"""
+        <div style='background-color:#fff3e0;border:1px solid #ff9800;border-radius:5px;padding:10px;margin:5px 0'>
+            <strong style='color:#333'>📊 Alert Details:</strong><br>
+            <span style='color:#333'>Rainfall: {latest['rainfall']:.1f} mm/hr</span><br>
+            <span style='color:#333'>Humidity: {latest['humidity']:.1f}%</span><br>
+            <span style='color:#333'>Pressure: {latest['pressure']:.1f} hPa</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Show recent alert count
+    if recent_alerts > 0:
+        st.markdown(f"""
+        <div style='background-color:#e3f2fd;border:1px solid #2196f3;border-radius:5px;padding:8px;margin:5px 0;text-align:center'>
+            <strong style='color:#333'>🔔 Recent Alerts: {recent_alerts}</strong> <span style='color:#666'>(last 10 readings)</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("<br>")
     st.markdown("<div style='font-size:1.1em'>System auto-refreshes every 5 seconds.</div>", unsafe_allow_html=True)
 
