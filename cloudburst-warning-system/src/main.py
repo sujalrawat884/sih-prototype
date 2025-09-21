@@ -24,12 +24,25 @@ load_dotenv()  # Load environment variables from .env file
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Twilio client
+# Initialize Twilio client (with error handling)
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_NUMBER = os.getenv("TWILIO_NUMBER")  # Your Twilio phone number
 
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+# Check if Twilio credentials are available
+TWILIO_ENABLED = bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_NUMBER)
+
+if TWILIO_ENABLED:
+    try:
+        twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        logger.info("✅ Twilio SMS service initialized successfully")
+    except Exception as e:
+        logger.warning(f"⚠️ Twilio initialization failed: {e}")
+        TWILIO_ENABLED = False
+        twilio_client = None
+else:
+    twilio_client = None
+    logger.info("📱 Twilio SMS service disabled (credentials not found) - using mock SMS")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -105,16 +118,58 @@ def anomaly_detection(data: Dict[str, float]) -> str:
 def send_alert_sms(message: str, numbers: list):
     """
     Send SMS alert using Twilio to a list of phone numbers.
+    Falls back to mock SMS if Twilio is not configured or fails.
+    
+    Args:
+        message: SMS message content
+        numbers: List of phone numbers to send to
+        
+    Returns:
+        list: List of response objects with SMS status
     """
     responses = []
+    
+    if not TWILIO_ENABLED or not twilio_client:
+        # Mock SMS functionality for testing/demo
+        for number in numbers:
+            mock_response = {
+                "number": number,
+                "sid": f"mock_sms_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "status": "mock_sent",
+                "message": "SMS service in demo mode"
+            }
+            responses.append(mock_response)
+            logger.info(f"📱 MOCK SMS sent to {number}: {message}")
+            print(f"📱 MOCK SMS ALERT → {number}: {message}")
+        return responses
+    
+    # Real SMS sending with error handling
     for number in numbers:
-        sms = twilio_client.messages.create(
-            body=message,
-            from_=TWILIO_NUMBER,
-            to=f"+91{number}"  # Add country code if needed
-        )
-        logger.info(f"Alert SMS sent to {number}. SID: {sms.sid}, Status: {sms.status}")
-        responses.append({"number": number, "sid": sms.sid, "status": sms.status})
+        try:
+            sms = twilio_client.messages.create(
+                body=message,
+                from_=TWILIO_NUMBER,
+                to=f"+91{number}"  # Add country code if needed
+            )
+            logger.info(f"✅ Real SMS sent to {number}. SID: {sms.sid}, Status: {sms.status}")
+            responses.append({
+                "number": number, 
+                "sid": sms.sid, 
+                "status": sms.status,
+                "message": "SMS sent successfully"
+            })
+        except Exception as e:
+            logger.error(f"❌ Failed to send SMS to {number}: {str(e)}")
+            # Fallback to mock SMS on failure
+            mock_response = {
+                "number": number,
+                "sid": f"fallback_mock_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "status": "mock_fallback",
+                "message": f"SMS failed, using mock: {str(e)}"
+            }
+            responses.append(mock_response)
+            print(f"📱 FALLBACK MOCK SMS → {number}: {message}")
+    
     return responses
 
 def trigger_alert(status: str, sensor_data: SensorData) -> None:
@@ -146,6 +201,7 @@ async def root():
         "endpoints": {
             "POST /sensor-data": "Submit sensor readings",
             "GET /latest-readings": "Get last 50 sensor readings",
+            "POST /trigger-cloudburst": "Manually trigger cloudburst alert (for testing)",
             "GET /health": "Health check"
         }
     }
@@ -153,11 +209,16 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with SMS service status."""
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "readings_count": len(sensor_readings)
+        "readings_count": len(sensor_readings),
+        "sms_service": {
+            "enabled": TWILIO_ENABLED,
+            "status": "active" if TWILIO_ENABLED else "mock_mode",
+            "message": "Real SMS service" if TWILIO_ENABLED else "Using mock SMS for demo"
+        }
     }
 
 
@@ -209,6 +270,58 @@ async def process_sensor_data(sensor_data: SensorData):
     except Exception as e:
         logger.error(f"Error processing sensor data: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error processing sensor data: {str(e)}")
+
+
+@app.post("/trigger-cloudburst")
+async def trigger_manual_cloudburst():
+    """
+    Manually trigger a cloudburst alert for testing/demo purposes.
+    
+    This endpoint creates a fake cloudburst scenario with extreme sensor values
+    and triggers all the alert mechanisms including SMS alerts.
+    
+    Returns:
+        Dict: Response with cloudburst status and timestamp
+    """
+    try:
+        # Create fake extreme sensor data that would trigger cloudburst
+        fake_sensor_data = SensorData(
+            rainfall=75.5,    # High rainfall > 50
+            humidity=95.2,    # High humidity > 85
+            temperature=18.5, # Low temperature (storm conditions)
+            pressure=985.3    # Low pressure < 1000
+        )
+        
+        # Force cloudburst detection
+        status = "cloudburst_detected"
+        timestamp = datetime.now().isoformat()
+        
+        # Store the fake reading
+        reading_record = {
+            "timestamp": timestamp,
+            "status": status,
+            "data": fake_sensor_data.dict()
+        }
+        sensor_readings.append(reading_record)
+        
+        # Trigger all alerts (SMS, logging, etc.)
+        trigger_alert(status, fake_sensor_data)
+        
+        # Create response
+        response = {
+            "status": status,
+            "timestamp": timestamp,
+            "message": "Manual cloudburst alert triggered successfully!",
+            "data": fake_sensor_data.dict(),
+            "alert_sent": True
+        }
+        
+        logger.critical(f"Manual cloudburst triggered: {timestamp}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error triggering manual cloudburst: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error triggering cloudburst: {str(e)}")
 
 
 @app.get("/latest-readings")

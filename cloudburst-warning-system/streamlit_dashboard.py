@@ -144,6 +144,25 @@ with left:
     st.markdown(f"<h2 style='color:{color};font-size:3em;text-align:center'>{icon} {status.replace('_', ' ').title()}</h2>", unsafe_allow_html=True)
     st.markdown(f"<div style='text-align:center;font-size:1.1em'>Last alert: <b>{timestamp.strftime('%Y-%m-%d %H:%M:%S')}</b></div>", unsafe_allow_html=True)
     
+    # Manual Cloudburst Trigger Button
+    st.markdown("---")
+    st.markdown("**🧪 Testing Controls**")
+    
+    if st.button("🚨 Trigger Manual Cloudburst", type="primary", use_container_width=True):
+        try:
+            trigger_response = requests.post(f"{API_URL.replace('/latest-readings', '')}/trigger-cloudburst", timeout=5)
+            if trigger_response.status_code == 200:
+                st.success("✅ Manual cloudburst alert triggered successfully!")
+                st.balloons()
+                # Force refresh after trigger
+                st.rerun()
+            else:
+                st.error(f"❌ Failed to trigger alert: {trigger_response.status_code}")
+        except Exception as e:
+            st.error(f"❌ Error triggering alert: {e}")
+    
+    st.caption("Use this button to test the cloudburst alert system without waiting for extreme weather conditions.")
+    
     # Show SMS alert notification for cloudburst detection
     if status == "cloudburst_detected":
         st.markdown("""
